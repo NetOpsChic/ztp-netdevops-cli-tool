@@ -1,0 +1,73 @@
+{
+  "Dhcp4": {
+    "interfaces-config": {
+      "interfaces": ["eth0"]
+    },
+    "lease-database": {
+      "type": "memfile",
+      "persist": true,
+      "name": "/var/lib/kea/kea-leases4.csv"
+    },
+    "host-reservation-identifiers": ["hw-address"],
+    "valid-lifetime": 3600,
+    "renew-timer": 900,
+    "rebind-timer": 1800,
+
+    "subnet4": [
+      {
+        "id": 1,
+        "subnet": "{{ SUBNET }}/24",
+        "interface": "eth0",
+        "match-client-id": false,
+        "pools": [
+          { "pool": "{{ RANGE_START }} - {{ RANGE_END }}" }
+        ],
+        "reservations": [
+          {% for device in devices %}
+          {
+            "hw-address": "{{ device.mac_address }}",
+            "ip-address": "{{ device.reserved_ip }}",
+            "hostname": "{{ device.hostname }}",
+            "client-classes": ["HOST_{{ device.hostname }}"]
+          }{% if not loop.last %},{% endif %}
+          {% endfor %}
+        ],
+        "option-data": [
+          { "name": "routers", "data": "{{ ROUTER_IP }}" },
+          { "name": "domain-name-servers", "data": "{{ DNS_SERVERS }}" },
+          { "name": "broadcast-address", "data": "{{ BROADCAST_IP }}" },
+          { "name": "tftp-server-name", "data": "{{ ZTP_IP }}" }
+        ]
+      }
+    ],
+
+    "client-classes": [
+      {
+        "name": "ARISTA_DEVICES",
+        "test": "substring(option[60].text, 0, 6) == 'Arista'",
+        "option-data": [
+          { "name": "vendor-class-identifier", "data": "Arista" }
+        ]
+      }{% for device in devices %},
+      {
+        "name": "HOST_{{ device.hostname }}",
+        "test": "member('ARISTA_DEVICES')",
+        "option-data": [
+          { "name": "boot-file-name", "data": "{{ device.hostname }}.cfg" }
+        ]
+      }
+      {% endfor %}
+    ],
+
+    "loggers": [
+      {
+        "name": "kea-dhcp4",
+        "output_options": [
+          { "output": "stdout" }
+        ],
+        "severity": "DEBUG",
+        "debuglevel": 99
+      }
+    ]
+  }
+}
